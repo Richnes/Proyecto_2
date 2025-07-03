@@ -2,6 +2,8 @@ import random
 import json
 import time
 import os
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
 # Estado global del juego
 estado_juego = {
     "matriz": [],
@@ -12,16 +14,48 @@ estado_juego = {
     "movimientos_totales": [],
     "nombre_jugador": ""
 }
+def exportar_info_pdf(jugador_id, datos):
+    nombre_archivo = f"{jugador_id}_info.pdf"
+    c = canvas.Canvas(nombre_archivo,pagesize=letter)
+    c.setFont("Helvetica",12)
+    
+    c.drawString(100, 750, "INFORMACIÓN DEL JUGADOR")
+    c.drawString(100, 720, F"ID: {jugador_id}")
+    c.drawString(100, 700, f"Nombre: {datos['nombre']}")
+    c.drawString(100, 680, f"Correo: {datos['correo']}")
+    c.drawString(100, 660, f"Fecha: {datos['fecha']}")
+    c.drawString(100,640, f"Puntaje: {datos.get('puntaje', 0)}")
 
+    movimiento = datos.get("movimientos", [])
+    c.drawString(100, 620, "Movimientos:")
+    
+    #Mostrar los movimientos divididos en líneas si son muchos
+    linea = 600 
+    linea_max = 100
+    linea_texto = ""
+    for i, mov in enumerate(movimiento):
+        linea_texto += mov + " "
+        if (i+1) % 20 == 0 or i == len(movimiento) - 1:
+            c.drawString(120, linea, linea_texto.strip())
+            linea_texto = ""
+            linea -= 20
+            if linea < linea_max:
+                break #evitar que pase de página 
+    c.save()
+    print(f"PDF generado: {nombre_archivo}")
+    
+    
+#mostramos los ganadores por orden asecendente de mes/año
 def ganadores_del_mes():
     jugadores = cargar_jugadores()
     ganadores = {}
     
+#inicamos un dic de ganadores vacía para agregarlos ahí
     for jugador_id, datos in jugadores.items():
         fecha = datos.get("fecha")
         puntaje = datos.get("puntaje")
         nombre = datos.get("nombre")
-
+#si en la fecha no hay ganadores o el puntaje es mayor que 0 se agrega un ganador 
         if fecha not in ganadores or puntaje > ganadores[fecha][1]:
             ganadores[fecha] = (nombre,puntaje)
 
@@ -44,12 +78,13 @@ def mostrar_rankings():
     print("{:<6} {:15} {:<10}".format("ID","Nombre","Puntaje"))
     print("-"*35)
     
-    ranking = sorted(jugadores.items(), key=lambda x: x[1].get("puntaje"))
+    ranking = sorted(jugadores.items(), key=lambda x: x[1].get("puntaje"),reverse=True)
     
     for jugador_id, datos in ranking:
         nombre = datos.get("nombre","")
         puntaje = datos.get("puntaje",0)
         print("{:<6} {:<15} {:<10}".format(jugador_id,nombre,puntaje))
+        
 def info_jugadores():
     jugadores = cargar_jugadores()
     jugador_id = input("Ingrese el ID del jugador: ").strip()
@@ -68,7 +103,10 @@ def info_jugadores():
     movimientos = jugador.get("movimientos", [])
     print(f"Movimientos: {' '.join(movimientos) if movimientos else 'Sin movimientos' }")
     
-    
+    opcion = input("¿Desea exportar esta información en PDF? (s/n): ").lower()
+    if opcion == "s":
+        exportar_info_pdf(jugador_id, jugador)
+        
 def guardar_resultado_partida():
     jugadores = cargar_jugadores()
     jugador_id = estado_juego["jugador_id"]
@@ -118,7 +156,7 @@ def registrar_jugador():
             estado_juego["nombre_jugador"] = nombre
             estado_juego["jugador_id"] = jugador_id
             return jugadores
-    nuevo_id = f"u8{len(jugadores)+1:02}"
+    nuevo_id = f"u{len(jugadores)+1:02}"
     jugadores[nuevo_id] = {
         "nombre": nombre,
         "correo": correo,
@@ -176,19 +214,19 @@ def movimiento_del_gusano(di, dj):
     nueva_cabeza = (cabeza[0] + di, cabeza[1] + dj)
 
     # Colisión con límites (manejo de "teletransporte" a través de los bordes)
-    new_row, new_col = nueva_cabeza # Desempaqueta la tupla para poder trabajar con los valores
+    nueva_fila, new_col = nueva_cabeza # Desempaqueta la tupla para poder trabajar con los valores
 
-    if new_row >= 10: # abajo
-        new_row = 0
-    elif new_row < 0: # arriba
-        new_row = 9
+    if nueva_fila >= 10: # abajo
+        nueva_fila = 0
+    elif nueva_fila < 0: # arriba
+        nueva_fila = 9
 
     if new_col >= 20: # por la derecha
         new_col = 0
     elif new_col < 0: # por la izquierda
         new_col = 19
 
-    nueva_cabeza = (new_row, new_col) 
+    nueva_cabeza = (nueva_fila, new_col) 
 
     # Colisión con sí misma
     # Se verifica si la nueva cabeza colisiona con cualquier parte del cuerpo de la serpiente,
